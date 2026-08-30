@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jarvis</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    background: #0b0b0d; color: #eaeaea; font-family: system-ui, sans-serif;
+    max-width: 640px; margin: 0 auto; padding: 24px 16px;
+  }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: .02em; }
+  .card {
+    background: #17171a; border: 1px solid #262629; border-radius: 14px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  input, textarea, button {
+    width: 100%; box-sizing: border-box; background: #0b0b0d; color: #eaeaea;
+    border: 1px solid #2c2c30; border-radius: 10px; padding: 10px 12px;
+    font-size: 14px; margin-top: 8px;
+  }
+  button {
+    background: #3a6df0; border: none; font-weight: 600; cursor: pointer;
+  }
+  button:hover { background: #4a7bff; }
+  .msg { padding: 10px 0; border-top: 1px solid #232326; }
+  .msg .q { color: #9aa0ff; }
+  .msg .a { margin-top: 6px; white-space: pre-wrap; }
+  .row { display: flex; gap: 8px; }
+  .row button { width: auto; padding: 10px 16px; }
+  small { color: #888; }
+</style>
+</head>
+<body>
+  <h1>🤖 Jarvis</h1>
+
+  <div class="card">
+    <small>Токен доступа (тот же AUTH_TOKEN, что на сервере)</small>
+    <input id="token" type="password" placeholder="AUTH_TOKEN" />
+  </div>
+
+  <div class="card">
+    <small>Задай вопрос прямо сейчас</small>
+    <textarea id="message" rows="3" placeholder="Например: какие новости про ИИ сегодня?"></textarea>
+    <button onclick="sendChat()">Спросить</button>
+    <div id="chatLog"></div>
+  </div>
+
+  <div class="card">
+    <small>Создать автономную задачу (по расписанию)</small>
+    <textarea id="taskPrompt" rows="2" placeholder="Что сделать: например, найди главные новости за день"></textarea>
+    <input id="taskCron" placeholder="Cron, например: 30 16 * * * (каждый день в 16:30)" />
+    <button onclick="createTask()">Запланировать</button>
+  </div>
+
+  <div class="card">
+    <small>Активные задачи</small>
+    <div id="taskList"></div>
+    <button onclick="loadTasks()">Обновить список</button>
+  </div>
+
+<script>
+const API_BASE = ""; // тот же домен, что и сайт (сервер отдаёт и API, и статику)
+
+function authHeaders() {
+  const token = document.getElementById("token").value.trim();
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+}
+
+async function sendChat() {
+  const message = document.getElementById("message").value.trim();
+  if (!message) return;
+  const log = document.getElementById("chatLog");
+  log.innerHTML = `<div class="msg"><div class="q">Ты: ${message}</div><div class="a">…думаю…</div></div>` + log.innerHTML;
+
+  const res = await fetch(`${API_BASE}/chat`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ message }),
+  });
+  const data = await res.json();
+  const first = log.querySelector(".msg .a");
+  first.textContent = data.reply || data.error || "Ошибка";
+  document.getElementById("message").value = "";
+}
+
+async function createTask() {
+  const prompt = document.getElementById("taskPrompt").value.trim();
+  const schedule = document.getElementById("taskCron").value.trim();
+  if (!prompt || !schedule) return alert("Заполни оба поля");
+
+  const res = await fetch(`${API_BASE}/tasks`, {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ prompt, schedule }),
+  });
+  if (!res.ok) { const e = await res.json(); return alert(e.error); }
+  document.getElementById("taskPrompt").value = "";
+  document.getElementById("taskCron").value = "";
+  loadTasks();
+}
+
+async function loadTasks() {
+  const res = await fetch(`${API_BASE}/tasks`, { headers: authHeaders() });
+  const tasks = await res.json();
+  const list = document.getElementById("taskList");
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    list.innerHTML = "<small>Пока нет задач</small>";
+    return;
+  }
+  list.innerHTML = tasks.map(t => `
+    <div class="msg">
+      <div>${t.prompt}</div>
+      <small>расписание: ${t.schedule} · статус: ${t.status}</small>
+      <div class="row">
+        <button onclick="runNow('${t.id}')">Выполнить сейчас</button>
+        <button onclick="removeTask('${t.id}')">Удалить</button>
+      </div>
+    </div>`).join("");
+}
+
+async function runNow(id) {
+  await fetch(`${API_BASE}/tasks/${id}/run-now`, { method: "POST", headers: authHeaders() });
+  alert("Запущено — результат придёт пуш-уведомлением");
+}
+
+async function removeTask(id) {
+  await fetch(`${API_BASE}/tasks/${id}`, { method: "DELETE", headers: authHeaders() });
+  loadTasks();
+}
+</script>
+</body>
+</html>

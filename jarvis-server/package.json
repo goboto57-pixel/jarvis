@@ -1,0 +1,23 @@
+{
+  "name": "jarvis-server",
+  "version": "1.0.0",
+  "description": "Серверная часть Jarvis: планировщик автономных задач, прокси к Mistral/Cartesia, push-уведомления через ntfy",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "lowdb": "^6.1.1",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^2.7.0",
+    "uuid": "^9.0.1"
+  }
+}
