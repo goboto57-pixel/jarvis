@@ -9,6 +9,7 @@ const { requireAuth } = require("./middleware/auth");
 
 const tasksRouter = require("./routes/tasks");
 const chatRouter = require("./routes/chat");
+const deviceRouter = require("./routes/device");
 
 const path = require("path");
 
@@ -24,6 +25,7 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 // Всё остальное — только с токеном
 app.use("/tasks", requireAuth, tasksRouter);
 app.use("/chat", requireAuth, chatRouter);
+app.use("/device", requireAuth, deviceRouter);
 
 const PORT = process.env.PORT || 3000;
 

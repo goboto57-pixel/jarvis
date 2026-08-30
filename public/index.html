@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jarvis</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0e0f11;
+    color: #e6e6e6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+
+  /* --- шапка --- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 17px; margin: 0; }
+  .badges { display: flex; gap: 8px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: #1c1d20; color: #9a9a9a;
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .badge.ok { background: rgba(52,199,89,.15); color: #34c759; }
+  .badge.bad { background: rgba(255,69,58,.15); color: #ff453a; }
+
+  /* --- токен --- */
+  #tokenGate {
+    background: #17181b; border: 1px solid #2a2b2e; border-radius: 14px;
+    padding: 22px; margin-bottom: 16px;
+  }
+  #tokenGate p { color: #9a9a9a; font-size: 13px; margin: 0 0 12px; }
+  .row { display: flex; gap: 8px; }
+  input[type="text"], input[type="password"], input[type="number"], textarea, select {
+    background: #1c1d20; border: 1px solid #2a2b2e; color: #e6e6e6;
+    border-radius: 10px; padding: 10px 12px; font-size: 14px; width: 100%;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  button {
+    background: #3478f6; color: white; border: none; border-radius: 10px;
+    padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+    white-space: nowrap;
+  }
+  button.secondary { background: #2a2b2e; color: #e6e6e6; }
+  button.danger { background: rgba(255,69,58,.15); color: #ff453a; }
+  button:disabled { opacity: .5; cursor: default; }
+
+  /* --- табы --- */
+  nav.tabs { display: flex; gap: 6px; margin-bottom: 16px; background: #17181b; padding: 4px; border-radius: 12px; border: 1px solid #2a2b2e; }
+  nav.tabs button {
+    flex: 1; background: transparent; color: #9a9a9a; font-weight: 600;
+    border-radius: 8px; padding: 9px 8px;
+  }
+  nav.tabs button.active { background: #3478f6; color: white; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: #17181b; border: 1px solid #2a2b2e; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 14px; margin: 0 0 12px; color: #cfcfcf; }
+
+  /* --- чат --- */
+  #chatLog { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; margin-bottom: 12px; }
+  .msg { padding: 10px 13px; border-radius: 12px; font-size: 14px; line-height: 1.4; max-width: 88%; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: #3478f6; color: white; }
+  .msg.bot { align-self: flex-start; background: #1c1d20; border: 1px solid #2a2b2e; }
+  .msg.err { align-self: flex-start; background: rgba(255,69,58,.1); border: 1px solid rgba(255,69,58,.3); color: #ff8a80; }
+
+  /* --- списки задач / команд --- */
+  .item {
+    background: #1c1d20; border: 1px solid #2a2b2e; border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px; font-size: 13px;
+  }
+  .item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .item .meta { color: #7d7d7d; font-size: 11.5px; margin-top: 4px; }
+  .item .result { margin-top: 6px; color: #cfcfcf; white-space: pre-wrap; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .pill.pending { background: rgba(255,214,10,.15); color: #ffd60a; }
+  .pill.sent { background: rgba(10,132,255,.15); color: #0a84ff; }
+  .pill.active { background: rgba(10,132,255,.15); color: #0a84ff; }
+  .pill.done { background: rgba(52,199,89,.15); color: #34c759; }
+  .pill.error { background: rgba(255,69,58,.15); color: #ff453a; }
+  .empty { color: #7d7d7d; font-size: 13px; text-align: center; padding: 14px 0; }
+
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 12px; color: #9a9a9a; margin-bottom: 5px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .checkboxRow { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfcfcf; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Jarvis</h1>
+    <div class="badges">
+      <div id="serverBadge" class="badge"><span class="dot"></span><span>сервер…</span></div>
+      <div id="phoneBadge" class="badge"><span class="dot"></span><span>телефон…</span></div>
+    </div>
+  </header>
+
+  <div id="tokenGate">
+    <p>Введите AUTH_TOKEN сервера (тот же, что в переменных окружения Render / .env)</p>
+    <div class="row">
+      <input type="password" id="tokenInput" placeholder="AUTH_TOKEN" />
+      <button id="tokenSave">Войти</button>
+    </div>
+  </div>
+
+  <div id="app" style="display:none">
+    <nav class="tabs">
+      <button data-tab="chat" class="active">Чат</button>
+      <button data-tab="tasks">Задачи</button>
+      <button data-tab="device">Телефон</button>
+    </nav>
+
+    <!-- ЧАТ -->
+    <section id="tab-chat" class="panel active">
+      <div class="card">
+        <div id="chatLog"></div>
+        <div class="row">
+          <input type="text" id="chatInput" placeholder="Спросить Джарвиса..." />
+          <button id="chatSend">Отправить</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ЗАДАЧИ -->
+    <section id="tab-tasks" class="panel">
+      <div class="card">
+        <h2>Новая задача</h2>
+        <div class="field">
+          <label>Промпт (или шаги через новую строку, если их несколько)</label>
+          <textarea id="taskPrompt" placeholder="Например: найди новости про ИИ и коротко перескажи"></textarea>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Cron-расписание</label>
+            <input type="text" id="taskSchedule" placeholder="30 16 * * *" />
+          </div>
+          <div class="field">
+            <label>Часовой пояс</label>
+            <input type="text" id="taskTz" placeholder="Europe/Moscow" value="Europe/Moscow" />
+          </div>
+        </div>
+        <div class="checkboxRow">
+          <input type="checkbox" id="taskOnce" />
+          <label for="taskOnce">Разово (снять после первого выполнения)</label>
+        </div>
+        <button id="taskCreate">Создать задачу</button>
+      </div>
+
+      <div class="card">
+        <div class="top" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h2 style="margin:0">Активные задачи</h2>
+          <button class="secondary" id="tasksRefresh">Обновить</button>
+        </div>
+        <div id="tasksList"><div class="empty">Загрузка...</div></div>
+      </div>
+
+      <div class="card">
+        <h2>История выполнения</h2>
+        <div id="tasksHistory"><div class="empty">Загрузка...</div></div>
+      </div>
+    </section>
+
+    <!-- ТЕЛЕФОН -->
+    <section id="tab-device" class="panel">
+      <div class="card">
+        <h2>Отправить команду</h2>
+        <div class="field">
+          <label>Команда</label>
+          <select id="deviceAction"></select>
+        </div>
+        <div id="deviceParams"></div>
+        <button id="deviceSend">Отправить на телефон</button>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h2 style="margin:0">Очередь и результаты</h2>
+          <button class="secondary" id="deviceRefresh">Обновить</button>
+        </div>
+        <div id="deviceList"><div class="empty">Загрузка...</div></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY = "jarvis_token";
+let token = localStorage.getItem(TOKEN_KEY) || "";
+
+function authHeaders(extra) {
+  return Object.assign({ "Authorization": "Bearer " + token }, extra || {});
+}
+
+async function api(path, opts) {
+  opts = opts || {};
+  const res = await fetch(path, {
+    method: opts.method || "GET",
+    headers: authHeaders(opts.body ? { "Content-Type": "application/json" } : {}),
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error((data && data.error) || ("Ошибка " + res.status));
+  return data;
+}
+
+// ---------- вход по токену ----------
+const tokenGate = document.getElementById("tokenGate");
+const appEl = document.getElementById("app");
+
+function tryEnter() {
+  if (!token) return;
+  tokenGate.style.display = "none";
+  appEl.style.display = "block";
+  refreshServerBadge();
+  refreshPhoneBadge();
+  loadTasks();
+  loadHistory();
+  loadDeviceCatalog();
+  loadDeviceCommands();
+}
+
+document.getElementById("tokenSave").addEventListener("click", () => {
+  const v = document.getElementById("tokenInput").value.trim();
+  if (!v) return;
+  token = v;
+  localStorage.setItem(TOKEN_KEY, token);
+  tryEnter();
+});
+if (token) tryEnter();
+
+// ---------- бейджи статуса ----------
+async function refreshServerBadge() {
+  const el = document.getElementById("serverBadge");
+  try {
+    const r = await fetch("/health").then((r) => r.json());
+    el.className = "badge ok";
+    el.innerHTML = "<span class='dot'></span><span>сервер: ок</span>";
+  } catch (e) {
+    el.className = "badge bad";
+    el.innerHTML = "<span class='dot'></span><span>сервер недоступен</span>";
+  }
+}
+
+async function refreshPhoneBadge() {
+  const el = document.getElementById("phoneBadge");
+  try {
+    const s = await api("/device/status");
+    if (s.online) {
+      el.className = "badge ok";
+      const batt = typeof s.battery === "number" ? ", заряд " + s.battery + "%" : "";
+      el.innerHTML = "<span class='dot'></span><span>телефон на связи" + batt + "</span>";
+    } else {
+      el.className = "badge bad";
+      el.innerHTML = "<span class='dot'></span><span>телефон офлайн</span>";
+    }
+  } catch (e) {
+    el.className = "badge bad";
+    el.innerHTML = "<span class='dot'></span><span>телефон: ?</span>";
+  }
+}
+
+// ---------- табы ----------
+document.querySelectorAll("nav.tabs button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs button").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+  });
+});
+
+// ---------- ЧАТ ----------
+const chatLog = document.getElementById("chatLog");
+function addMsg(text, cls) {
+  const div = document.createElement("div");
+  div.className = "msg " + cls;
+  div.textContent = text;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+async function sendChat() {
+  const input = document.getElementById("chatInput");
+  const text = input.value.trim();
+  if (!text) return;
+  addMsg(text, "user");
+  input.value = "";
+  try {
+    const data = await api("/chat", { method: "POST", body: { message: text } });
+    addMsg(data.reply, "bot");
+  } catch (e) {
+    addMsg(e.message, "err");
+  }
+}
+document.getElementById("chatSend").addEventListener("click", sendChat);
+document.getElementById("chatInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendChat();
+});
+
+// ---------- ЗАДАЧИ ----------
+async function loadTasks() {
+  const el = document.getElementById("tasksList");
+  try {
+    const tasks = await api("/tasks");
+    if (!tasks.length) { el.innerHTML = "<div class='empty'>Нет активных задач</div>"; return; }
+    el.innerHTML = tasks.map((t) => `
+      <div class="item">
+        <div class="top">
+          <strong>${escapeHtml(t.prompt || (t.steps || []).join(" → "))}</strong>
+          <span class="pill ${t.status === 'done' ? 'done' : 'active'}">${t.status}</span>
+        </div>
+        <div class="meta">${t.schedule} · ${t.timezone}${t.once ? ' · разово' : ''}</div>
+        <div class="row" style="margin-top:8px">
+          <button class="secondary" onclick="runTaskNow('${t.id}')">Выполнить сейчас</button>
+          <button class="danger" onclick="deleteTask('${t.id}')">Удалить</button>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    el.innerHTML = "<div class='empty'>" + escapeHtml(e.message) + "</div>";
+  }
+}
+async function loadHistory() {
+  const el = document.getElementById("tasksHistory");
+  try {
+    const history = await api("/tasks/history/all");
+    if (!history.length) { el.innerHTML = "<div class='empty'>Пока пусто</div>"; return; }
+    el.innerHTML = history.slice(0, 30).map((h) => `
+      <div class="item">
+        <div class="meta">${new Date(h.ranAt).toLocaleString("ru-RU")}</div>
+        <div><strong>${escapeHtml(h.prompt || "")}</strong></div>
+        <div class="result">${escapeHtml(h.result || "")}</div>
+      </div>
+    `).join("");
+  } catch (e) {
+    el.innerHTML = "<div class='empty'>" + escapeHtml(e.message) + "</div>";
+  }
+}
+async function runTaskNow(id) {
+  try { await api("/tasks/" + id + "/run-now", { method: "POST" }); setTimeout(loadHistory, 1500); }
+  catch (e) { alert(e.message); }
+}
+async function deleteTask(id) {
+  if (!confirm("Удалить задачу?")) return;
+  try { await api("/tasks/" + id, { method: "DELETE" }); loadTasks(); }
+  catch (e) { alert(e.message); }
+}
+document.getElementById("taskCreate").addEventListener("click", async () => {
+  const raw = document.getElementById("taskPrompt").value.trim();
+  const schedule = document.getElementById("taskSchedule").value.trim();
+  const timezone = document.getElementById("taskTz").value.trim() || "Europe/Moscow";
+  const once = document.getElementById("taskOnce").checked;
+  if (!raw || !schedule) { alert("Заполните промпт и расписание"); return; }
+
+  const lines = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+  const body = lines.length > 1
+    ? { steps: lines, schedule, timezone, once }
+    : { prompt: lines[0], schedule, timezone, once };
+
+  try {
+    await api("/tasks", { method: "POST", body });
+    document.getElementById("taskPrompt").value = "";
+    document.getElementById("taskSchedule").value = "";
+    loadTasks();
+  } catch (e) { alert(e.message); }
+});
+document.getElementById("tasksRefresh").addEventListener("click", () => { loadTasks(); loadHistory(); });
+
+// ---------- ТЕЛЕФОН ----------
+let deviceCatalog = [];
+async function loadDeviceCatalog() {
+  const select = document.getElementById("deviceAction");
+  try {
+    deviceCatalog = await api("/device/catalog");
+    select.innerHTML = deviceCatalog.map((c) => `<option value="${c.action}">${escapeHtml(c.label)}</option>`).join("");
+    renderDeviceParams();
+  } catch (e) {
+    select.innerHTML = "<option>ошибка загрузки</option>";
+  }
+}
+function renderDeviceParams() {
+  const action = document.getElementById("deviceAction").value;
+  const cmd = deviceCatalog.find((c) => c.action === action);
+  const container = document.getElementById("deviceParams");
+  if (!cmd || !cmd.params.length) { container.innerHTML = ""; return; }
+  container.innerHTML = cmd.params.map((p) => `
+    <div class="field">
+      <label>${escapeHtml(p.label)}</label>
+      <input type="${p.type === 'number' ? 'number' : 'text'}" data-param="${p.name}" />
+    </div>
+  `).join("");
+}
+document.getElementById("deviceAction").addEventListener("change", renderDeviceParams);
+
+document.getElementById("deviceSend").addEventListener("click", async () => {
+  const action = document.getElementById("deviceAction").value;
+  const args = {};
+  document.querySelectorAll("#deviceParams [data-param]").forEach((input) => {
+    const val = input.value.trim();
+    if (val === "") return;
+    args[input.dataset.param] = input.type === "number" ? Number(val) : val;
+  });
+  try {
+    await api("/device/commands", { method: "POST", body: { action, args } });
+    loadDeviceCommands();
+  } catch (e) { alert(e.message); }
+});
+
+async function loadDeviceCommands() {
+  const el = document.getElementById("deviceList");
+  try {
+    const list = await api("/device/commands");
+    if (!list.length) { el.innerHTML = "<div class='empty'>Команд пока не было</div>"; return; }
+    const byAction = {};
+    deviceCatalog.forEach((c) => byAction[c.action] = c.label);
+    el.innerHTML = list.slice(0, 30).map((c) => `
+      <div class="item">
+        <div class="top">
+          <strong>${escapeHtml(byAction[c.action] || c.action)}</strong>
+          <span class="pill ${c.status}">${statusLabel(c.status)}</span>
+        </div>
+        <div class="meta">${new Date(c.createdAt).toLocaleString("ru-RU")}${Object.keys(c.args||{}).length ? " · " + escapeHtml(JSON.stringify(c.args)) : ""}</div>
+        ${c.result ? `<div class="result">${escapeHtml(c.result)}</div>` : ""}
+      </div>
+    `).join("");
+  } catch (e) {
+    el.innerHTML = "<div class='empty'>" + escapeHtml(e.message) + "</div>";
+  }
+}
+function statusLabel(s) {
+  return { pending: "ждёт", sent: "передана", done: "готово", error: "ошибка" }[s] || s;
+}
+document.getElementById("deviceRefresh").addEventListener("click", loadDeviceCommands);
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+// ---------- фоновое обновление ----------
+setInterval(() => {
+  if (!token) return;
+  refreshServerBadge();
+  refreshPhoneBadge();
+  if (document.getElementById("tab-device").classList.contains("active")) loadDeviceCommands();
+}, 6000);
+</script>
+</body>
+</html>
