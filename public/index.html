@@ -144,7 +144,7 @@
         <div class="grid2">
           <div class="field">
             <label>Cron-расписание</label>
-            <input type="text" id="taskSchedule" placeholder="30 16 * * *" />
+            <input type="text" id="taskSchedule" placeholder="9:30 или 30 16 * * *" />
           </div>
           <div class="field">
             <label>Часовой пояс</label>
@@ -174,6 +174,9 @@
 
     <!-- ТЕЛЕФОН -->
     <section id="tab-device" class="panel">
+      <div class="card" id="deviceOfflineNotice" style="display:none">
+        <div class="meta" style="color:#ff8a80">Телефон офлайн: команды встанут в очередь и выполнятся, когда на телефоне включено «Фоновое прослушивание» и есть интернет.</div>
+      </div>
       <div class="card">
         <h2>Отправить команду</h2>
         <div class="field">
@@ -258,6 +261,8 @@ async function refreshPhoneBadge() {
   const el = document.getElementById("phoneBadge");
   try {
     const s = await api("/device/status");
+    const notice = document.getElementById("deviceOfflineNotice");
+    if (notice) notice.style.display = s.online ? "none" : "block";
     if (s.online) {
       el.className = "badge ok";
       const batt = typeof s.battery === "number" ? ", заряд " + s.battery + "%" : "";
@@ -359,10 +364,20 @@ async function deleteTask(id) {
 }
 document.getElementById("taskCreate").addEventListener("click", async () => {
   const raw = document.getElementById("taskPrompt").value.trim();
-  const schedule = document.getElementById("taskSchedule").value.trim();
+  let schedule = document.getElementById("taskSchedule").value.trim();
   const timezone = document.getElementById("taskTz").value.trim() || "Europe/Moscow";
   const once = document.getElementById("taskOnce").checked;
   if (!raw || !schedule) { alert("Заполните промпт и расписание"); return; }
+
+  // Разрешаем ввести просто время "9:30" или "09:30" вместо cron-синтаксиса —
+  // конвертируем сами в "MM HH * * *" (ежедневно в это время).
+  const timeMatch = schedule.match(/^(\d{1,2}):(\d{2})$/);
+  if (timeMatch) {
+    const hour = parseInt(timeMatch[1], 10);
+    const minute = parseInt(timeMatch[2], 10);
+    if (hour > 23 || minute > 59) { alert("Некорректное время: часы 0-23, минуты 0-59"); return; }
+    schedule = `${minute} ${hour} * * *`;
+  }
 
   const lines = raw.split("\n").map((s) => s.trim()).filter(Boolean);
   const body = lines.length > 1
@@ -380,13 +395,14 @@ document.getElementById("tasksRefresh").addEventListener("click", () => { loadTa
 
 // ---------- ТЕЛЕФОН ----------
 let deviceCatalog = [];
-async function loadDeviceCatalog() {
+async function loadDeviceCatalog(retry = true) {
   const select = document.getElementById("deviceAction");
   try {
     deviceCatalog = await api("/device/catalog");
     select.innerHTML = deviceCatalog.map((c) => `<option value="${c.action}">${escapeHtml(c.label)}</option>`).join("");
     renderDeviceParams();
   } catch (e) {
+    if (retry) { setTimeout(() => loadDeviceCatalog(false), 1500); return; }
     select.innerHTML = "<option>ошибка загрузки</option>";
   }
 }
