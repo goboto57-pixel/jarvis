@@ -1,93 +1,83 @@
-# Jarvis Server
+# FMD Server
 
-Серверная часть Джарвиса: выполняет задачи по расписанию (даже если телефон
-выключен), шлёт push-уведомления через **ntfy**, отдаёт простой веб-сайт для
-чата с ассистентом, и API для будущей интеграции с Android-приложением.
+This is the official server for [FMD Android](https://gitlab.com/fmd-foss/fmd-android)
+written in Go and React.
 
-## Что уже есть
+The FMD app can register an account on FMD Server.
+The app can then upload its location at regular intervals.
+You can also push commands to the FMD app on your device from FMD Server,
+e.g. to make your device ring.
 
-- `POST /chat` — задать вопрос прямо сейчас, получить ответ от Mistral.
-- `POST /tasks` — создать автономную задачу с cron-расписанием
-  (например: `{"prompt": "найди новости про ИИ", "schedule": "30 16 * * *"}`
-  выполнится каждый день в 16:30).
-  Многошаговая задача: `{"steps": ["шаг 1", "шаг 2"], "schedule": "..."}` —
-  шаги выполняются по порядку, результат предыдущего шага передаётся в
-  следующий как контекст.
-- `GET /tasks` — список задач.
-- `POST /tasks/:id/run-now` — выполнить задачу немедленно (для проверки).
-- `DELETE /tasks/:id` — удалить задачу.
-- `GET /tasks/history/all` — история выполненных задач.
-- Веб-сайт на `/` — интерфейс: чат, управление задачами и удалённое
-  управление телефоном (вкладка "Телефон").
-- `POST /device/commands` — поставить команду телефону (`{"action":"flashlight_on","args":{}}`).
-- `GET /device/commands` — очередь команд + статусы/результаты (для сайта).
-- `GET /device/commands/pending` / `POST /device/commands/:id/result` — забрать и отчитаться (для телефона).
-- `POST /device/heartbeat` / `GET /device/status` — "телефон на связи" + заряд батареи.
-  Работает только пока в приложении включён "Фоновый режим" (WakeWordService)
-  и заданы адрес сервера + токен в настройках приложения.
-- Все пути (кроме `/health`) защищены токеном:
-  заголовок `Authorization: Bearer <AUTH_TOKEN>`.
+## Running FMD Server
 
-## Локальный запуск
+You can try FMD Server on your laptop with Docker.
 
 ```bash
-cp .env.example .env
-# заполни AUTH_TOKEN, MISTRAL_API_KEY, NTFY_TOPIC внутри .env
-npm install
-npm run dev
+docker run --rm -p 8080:8080 registry.gitlab.com/fmd-foss/fmd-server:0.16.0
 ```
-Открой `http://localhost:3000` — введи токен из `.env`, попробуй чат.
 
-## Деплой на Render
+You can now visit FMD Server's web interface in your browser at <http://localhost:8080>.
+You can register you FMD app using the server URL `http://<your-laptops-ip>:8080`.
 
-1. Залей эту папку в свой git-репозиторий (GitHub/GitLab).
-2. На [render.com](https://render.com) → **New → Blueprint** → укажи репозиторий.
-   Render сам прочитает `render.yaml` и создаст веб-сервис.
-   (Если блюпринт не подхватится — создай вручную **New → Web Service**,
-   `Build Command: npm install`, `Start Command: npm start`.)
-3. В **Environment** пропиши: `AUTH_TOKEN`, `MISTRAL_API_KEY`, `CARTESIA_API_KEY`,
-   `CARTESIA_VOICE_ID`, `NTFY_TOPIC` — те же имена, что в `.env.example`.
-4. После деплоя Render даст URL вида `https://jarvis-server-xxxx.onrender.com`.
-   Это и есть адрес твоего сайта и API.
+Note that these steps are only for quick on-laptop testing and NOT for production!
 
-⚠️ **Бесплатный план Render засыпает** после ~15 минут без запросов и
-просыпается ~30–60 секунд на первый запрос. Для по-настоящему надёжного
-расписания (чтобы 16:30 срабатывало ровно в 16:30, а не после "пробуждения")
-на бесплатном плане нужно либо: (а) платный план без сна, либо (б) внешний
-пинг-сервис (например [cron-job.org](https://cron-job.org)), который раз в
-10 минут дергает `/health`, не давая серверу засыпать.
+## Self-hosting
 
-## Push-уведомления (ntfy)
+For self-hosting instructions, see the [installation guide](https://fmd-foss.org/docs/fmd-server/installation/overview).
 
-1. Придумай уникальный секретный топик, впиши в `NTFY_TOPIC` (например
-   `jarvis-a8f3c9d1x` — чем случайнее, тем лучше, топики на ntfy.sh публичные
-   по знанию имени).
-2. На телефоне: пока не встроили ntfy-библиотеку в само приложение Jarvis —
-   поставь официальное приложение **ntfy** из Play Store/F-Droid, подпишись
-   на тот же топик. Уведомления будут приходить туда.
-3. Позже (следующий шаг) — встраиваем ntfy Android SDK прямо в
-   JarvisAssistant, чтобы не нужно было отдельное приложение.
+## Community projects
 
-## Известные упрощения MVP
+See [this list](https://fmd-foss.org/docs/fmd-server/community) of community-maintained projects related to FMD Server.
 
-- **База данных — JSON-файл** (`data.json`), лежит на диске Render.
-  На бесплатном плане диск эфемерный: **при новом деплое (`git push`) файл
-  обнулится**, все задачи и история потеряются. Для продакшена — переезд на
-  Postgres (Render даёт бесплатную БД, миграция — использовать `pg` вместо
-  `lowdb`, могу сделать следующим шагом).
-- **`chatComplete` не умеет реально искать новости** — обычная модель Mistral
-  отвечает по своим знаниям, а не читает live-интернет. Задача "найди новости
-  в 16:30" сейчас честно даст ответ по знаниям модели (может быть устаревшим).
-  Чтобы это заработало по-настоящему — нужно подключить search-инструмент
-  (Mistral agents с web search, либо сторонний News API). Это отдельный шаг.
-- Нет разделения по пользователям — сервер рассчитан на одного тебя
-  (это и заложено токеном авторизации).
+## Building
 
-## Дальнейшие шаги (по порядку, как обсуждали)
+FMD Server consists of two parts: a web frontend written in React and a Go backend.
 
-1. ✅ Backend-скелет (это, что сейчас) — сделано.
-2. Подключить реальный поиск новостей (Mistral tool-calling или News API).
-3. Встроить ntfy Android SDK в JarvisAssistant вместо отдельного приложения.
-4. Обновить Android-приложение: добавить "серверный режим" — кнопка
-   "поставить задачу на потом" отправляет `POST /tasks` на твой Render-адрес.
-5. Переезд БД на Postgres, если эфемерность JSON-файла станет проблемой.
+You first need to compile the React app as a static site.
+See the [web/README.md](web/README.md) for instructions on how to build the web app.
+
+In a second step, compile the Go code into a static Go binary.
+This binary is stand-alone, and includes both the frontend and the backend.
+To build the Go app:
+
+```bash
+go run . serve
+# or
+go build
+./fmd-server serve
+```
+
+To easily build from source with Docker Compose, replace `image:` with `build:` as shown below.
+Then run `docker compose build && docker compose up`.
+
+```yaml
+services:
+  fmd:
+#    image: registry.gitlab.com/fmd-foss/fmd-server:v0.16.0
+    build: https://gitlab.com/fmd-foss/fmd-server.git#master
+```
+
+## Donate
+
+<script src="https://liberapay.com/FMD/widgets/button.js"></script>
+<noscript><a href="https://liberapay.com/FMD/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a></noscript>
+
+<a href='https://ko-fi.com/H2H35JLOY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://cdn.ko-fi.com/cdn/kofi4.png?v=2' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+
+## Funding
+
+<div style="display: inline-flex; align-items: center;">
+    <a href="https://nlnet.nl/" target="_blank">
+        <img src="https://nlnet.nl/logo/banner.svg" alt="nlnet" height="50">
+    </a>
+    <a href="https://nlnet.nl/taler" target="_blank">
+        <img src="https://nlnet.nl/image/logos/NGI_Mobifree_tag.svg" alt="NextGenerationInternet" height="50">
+    </a>
+</div>
+
+This project was funded through the NGI Mobifree Fund.
+For more details, visit our [project page](https://nlnet.nl/project/FMD/)
+
+## License
+
+FMD Server is published under [GPLv3-or-later](LICENSE).
